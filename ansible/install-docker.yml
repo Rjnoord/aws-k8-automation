@@ -1,0 +1,50 @@
+---
+- name: Configure server with Docker, Kubernetes, and Nginx
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+
+    - name: Install required packages
+      apt:
+        name:
+          - docker.io
+          - curl
+        state: present
+
+    - name: Start and enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install k3s lightweight Kubernetes
+      shell: curl -sfL https://get.k3s.io | sh -
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Wait for Kubernetes node to be ready
+      shell: kubectl get nodes
+      register: k3s_status
+      retries: 10
+      delay: 10
+      until: k3s_status.rc == 0
+
+    - name: Copy Kubernetes deployment file
+      copy:
+        src: ../kubernetes/deployment.yaml
+        dest: /home/ubuntu/deployment.yaml
+
+    - name: Copy Kubernetes service file
+      copy:
+        src: ../kubernetes/service.yaml
+        dest: /home/ubuntu/service.yaml
+
+    - name: Apply Kubernetes deployment
+      shell: kubectl apply -f /home/ubuntu/deployment.yaml
+
+    - name: Apply Kubernetes service
+      shell: kubectl apply -f /home/ubuntu/service.yaml
